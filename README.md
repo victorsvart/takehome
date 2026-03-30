@@ -129,6 +129,7 @@ Set `RMS_WEBHOOK_URL` in `backend/.env` to your [webhook.site](https://webhook.s
 
 - Click `Trigger Renewal Event` for any resident
 - Confirm payload arrives at webhook.site quickly
+- If using the Webhook mock server, use `docker logs westface-mock-rms` to check the payloads.
 
 ### Webhook authenticity verification (RMS side)
 
