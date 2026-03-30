@@ -58,6 +58,8 @@ Signals are persisted in `renewal_risk_signals` for explainability.
 
 This take-home uses inline retry for speed and clear verification. Production should use a queue/worker that polls `next_retry_at` to avoid request blocking and improve throughput.
 
+Decision rationale comments are tagged as `DECISION:` in source code for quick reviewer lookup.
+
 ## Manual Verification Queries
 
 Inspect delivery state:

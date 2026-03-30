@@ -16,11 +16,13 @@ async function bootstrap() {
   );
 
   const prismaService = app.get(PrismaService);
-  await prismaService.enableShutdownHooks(app);
+  prismaService.enableShutdownHooks(app);
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Renewal Risk API')
-    .setDescription('API docs for renewal risk calculation and webhook delivery flows')
+    .setDescription(
+      'API docs for renewal risk calculation and webhook delivery flows',
+    )
     .setVersion('1.0')
     .addTag('renewal-risk')
     .build();
@@ -30,4 +32,4 @@ async function bootstrap() {
   const port = process.env.PORT ? Number(process.env.PORT) : 3000;
   await app.listen(port);
 }
-bootstrap();
+void bootstrap();

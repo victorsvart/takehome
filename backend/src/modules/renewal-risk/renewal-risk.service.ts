@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { LeaseStatus, LeaseType, RiskTier } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
@@ -11,12 +15,19 @@ export class RenewalRiskService {
     private readonly webhooksService: WebhooksService,
   ) {}
 
-  async calculateRiskForProperty(propertyId: string, input: CalculateRenewalRiskDto) {
+  async calculateRiskForProperty(
+    propertyId: string,
+    input: CalculateRenewalRiskDto,
+  ) {
     if (input.propertyId !== propertyId) {
-      throw new BadRequestException('propertyId in body must match route parameter');
+      throw new BadRequestException(
+        'propertyId in body must match route parameter',
+      );
     }
 
-    const property = await this.prisma.property.findUnique({ where: { id: propertyId } });
+    const property = await this.prisma.property.findUnique({
+      where: { id: propertyId },
+    });
     if (!property) {
       throw new NotFoundException(`Property ${propertyId} not found`);
     }
@@ -62,117 +73,135 @@ export class RenewalRiskService {
       },
     });
 
-    const persistedScores = await this.prisma.$transaction(async (tx) => {
-      const rows: Array<{
-        residentId: string;
-        residentName: string;
-        unitId: string;
-        riskScore: number;
-        riskTier: RiskTier;
-        daysToExpiry: number;
+    const computedScores: Array<{
+      leaseId: string;
+      residentId: string;
+      residentName: string;
+      unitId: string;
+      unitDbId: string;
+      riskScore: number;
+      riskTier: RiskTier;
+      daysToExpiry: number;
+      signals: {
+        daysToExpiryDays: number;
+        paymentHistoryDelinquent: boolean;
+        noRenewalOfferYet: boolean;
+        rentGrowthAboveMarket: boolean;
+      };
+    }> = leases.map((lease) => {
+      const daysToExpiry =
+        lease.leaseType === LeaseType.month_to_month
+          ? 30
+          : this.diffDays(asOfDate, lease.leaseEndDate);
+      const daysSignal = this.daysToExpirySignal(daysToExpiry);
+      const expectedPayments = 6;
+      // DECISION: A resident is treated as delinquent when at least one expected
+      // monthly rent payment is missing in the six-month lookback window. This
+      // keeps the signal simple and matches "missed/late payments" intent.
+      const paymentHistoryDelinquent =
+        lease.resident.ledgerEntries.length <=
+        Math.max(1, expectedPayments - 1);
+      const delinquencySignal = paymentHistoryDelinquent ? 100 : 0;
+      const noRenewalOfferYet = lease.renewalOffers.length === 0;
+      const renewalOfferSignal = noRenewalOfferYet ? 100 : 0;
+      const marketRent = lease.unit.pricing[0]?.marketRent;
+      const rentGrowthAboveMarket =
+        marketRent !== undefined &&
+        Number(marketRent) >= Number(lease.monthlyRent) * 1.1;
+      const marketSignal =
+        marketRent === undefined ? 40 : rentGrowthAboveMarket ? 100 : 0;
+
+      const riskScore = Math.round(
+        daysSignal * 0.4 +
+          delinquencySignal * 0.25 +
+          renewalOfferSignal * 0.2 +
+          marketSignal * 0.15,
+      );
+
+      return {
+        leaseId: lease.id,
+        residentId: lease.residentId,
+        residentName: `${lease.resident.firstName} ${lease.resident.lastName}`,
+        unitId: lease.unit.unitNumber,
+        unitDbId: lease.unitId,
+        riskScore,
+        riskTier: this.toTier(riskScore),
+        daysToExpiry,
         signals: {
-          daysToExpiryDays: number;
-          paymentHistoryDelinquent: boolean;
-          noRenewalOfferYet: boolean;
-          rentGrowthAboveMarket: boolean;
-        };
-      }> = [];
-
-      for (const lease of leases) {
-        const daysToExpiry =
-          lease.leaseType === LeaseType.month_to_month
-            ? 30
-            : this.diffDays(asOfDate, lease.leaseEndDate);
-        const daysSignal = this.daysToExpirySignal(daysToExpiry);
-        const expectedPayments = 6;
-        const paymentHistoryDelinquent =
-          lease.resident.ledgerEntries.length < Math.max(1, expectedPayments - 1);
-        const delinquencySignal = paymentHistoryDelinquent ? 100 : 0;
-        const noRenewalOfferYet = lease.renewalOffers.length === 0;
-        const renewalOfferSignal = noRenewalOfferYet ? 100 : 0;
-        const marketRent = lease.unit.pricing[0]?.marketRent;
-        const rentGrowthAboveMarket =
-          marketRent !== undefined && Number(marketRent) >= Number(lease.monthlyRent) * 1.1;
-        const marketSignal = marketRent === undefined ? 40 : rentGrowthAboveMarket ? 100 : 0;
-
-        const riskScore = Math.round(
-          daysSignal * 0.4 +
-            delinquencySignal * 0.25 +
-            renewalOfferSignal * 0.2 +
-            marketSignal * 0.15,
-        );
-        const riskTier = this.toTier(riskScore);
-
-        const riskScoreRow = await tx.renewalRiskScore.upsert({
-          where: {
-            propertyId_residentId_asOfDate: {
-              propertyId,
-              residentId: lease.residentId,
-              asOfDate,
-            },
-          },
-          create: {
-            propertyId,
-            residentId: lease.residentId,
-            leaseId: lease.id,
-            asOfDate,
-            daysToExpiry,
-            riskScore,
-            riskTier,
-            calculatedAt,
-          },
-          update: {
-            leaseId: lease.id,
-            daysToExpiry,
-            riskScore,
-            riskTier,
-            calculatedAt,
-          },
-        });
-
-        await tx.renewalRiskSignal.upsert({
-          where: { renewalRiskScoreId: riskScoreRow.id },
-          create: {
-            propertyId,
-            residentId: lease.residentId,
-            leaseId: lease.id,
-            unitId: lease.unitId,
-            renewalRiskScoreId: riskScoreRow.id,
-            daysToExpiryDays: daysToExpiry,
-            paymentHistoryDelinquent,
-            noRenewalOfferYet,
-            rentGrowthAboveMarket,
-          },
-          update: {
-            leaseId: lease.id,
-            unitId: lease.unitId,
-            daysToExpiryDays: daysToExpiry,
-            paymentHistoryDelinquent,
-            noRenewalOfferYet,
-            rentGrowthAboveMarket,
-          },
-        });
-
-        rows.push({
-          residentId: lease.residentId,
-          residentName: `${lease.resident.firstName} ${lease.resident.lastName}`,
-          unitId: lease.unit.unitNumber,
-          riskScore,
-          riskTier,
-          daysToExpiry,
-          signals: {
-            daysToExpiryDays: daysToExpiry,
-            paymentHistoryDelinquent,
-            noRenewalOfferYet,
-            rentGrowthAboveMarket,
-          },
-        });
-      }
-
-      return rows;
+          daysToExpiryDays: daysToExpiry,
+          paymentHistoryDelinquent,
+          noRenewalOfferYet,
+          rentGrowthAboveMarket,
+        },
+      };
     });
 
-    const flagged = persistedScores.filter((row) => row.riskTier !== RiskTier.low);
+    // DECISION: Persist score rows in bounded chunks so a large property batch
+    // does not become one long serial transaction while each resident write
+    // remains atomic through per-row transactions.
+    const chunkSize = 25;
+    for (let index = 0; index < computedScores.length; index += chunkSize) {
+      const chunk = computedScores.slice(index, index + chunkSize);
+      await Promise.all(
+        chunk.map(async (row) => {
+          await this.prisma.$transaction(async (tx) => {
+            const riskScoreRow = await tx.renewalRiskScore.upsert({
+              where: {
+                propertyId_residentId_asOfDate: {
+                  propertyId,
+                  residentId: row.residentId,
+                  asOfDate,
+                },
+              },
+              create: {
+                propertyId,
+                residentId: row.residentId,
+                leaseId: row.leaseId,
+                asOfDate,
+                daysToExpiry: row.daysToExpiry,
+                riskScore: row.riskScore,
+                riskTier: row.riskTier,
+                calculatedAt,
+              },
+              update: {
+                leaseId: row.leaseId,
+                daysToExpiry: row.daysToExpiry,
+                riskScore: row.riskScore,
+                riskTier: row.riskTier,
+                calculatedAt,
+              },
+            });
+
+            await tx.renewalRiskSignal.upsert({
+              where: { renewalRiskScoreId: riskScoreRow.id },
+              create: {
+                propertyId,
+                residentId: row.residentId,
+                leaseId: row.leaseId,
+                unitId: row.unitDbId,
+                renewalRiskScoreId: riskScoreRow.id,
+                daysToExpiryDays: row.signals.daysToExpiryDays,
+                paymentHistoryDelinquent: row.signals.paymentHistoryDelinquent,
+                noRenewalOfferYet: row.signals.noRenewalOfferYet,
+                rentGrowthAboveMarket: row.signals.rentGrowthAboveMarket,
+              },
+              update: {
+                leaseId: row.leaseId,
+                unitId: row.unitDbId,
+                daysToExpiryDays: row.signals.daysToExpiryDays,
+                paymentHistoryDelinquent: row.signals.paymentHistoryDelinquent,
+                noRenewalOfferYet: row.signals.noRenewalOfferYet,
+                rentGrowthAboveMarket: row.signals.rentGrowthAboveMarket,
+              },
+            });
+          });
+        }),
+      );
+    }
+
+    const flagged = computedScores.filter(
+      (row) => row.riskTier !== RiskTier.low,
+    );
     const riskTiers = {
       high: flagged.filter((row) => row.riskTier === RiskTier.high).length,
       medium: flagged.filter((row) => row.riskTier === RiskTier.medium).length,
@@ -182,7 +211,7 @@ export class RenewalRiskService {
     return {
       propertyId,
       calculatedAt: calculatedAt.toISOString(),
-      totalResidents: persistedScores.length,
+      totalResidents: computedScores.length,
       flaggedCount: flagged.length,
       riskTiers,
       flags: flagged.map((row) => ({
@@ -231,7 +260,9 @@ export class RenewalRiskService {
       },
     });
 
-    const flagged = scores.filter((row) => row.riskTier !== RiskTier.low && row.signal);
+    const flagged = scores.filter(
+      (row) => row.riskTier !== RiskTier.low && row.signal,
+    );
 
     return {
       propertyId,
@@ -240,7 +271,8 @@ export class RenewalRiskService {
       flaggedCount: flagged.length,
       riskTiers: {
         high: flagged.filter((row) => row.riskTier === RiskTier.high).length,
-        medium: flagged.filter((row) => row.riskTier === RiskTier.medium).length,
+        medium: flagged.filter((row) => row.riskTier === RiskTier.medium)
+          .length,
         low: flagged.filter((row) => row.riskTier === RiskTier.low).length,
       },
       flags: flagged.map((row) => ({
@@ -252,7 +284,8 @@ export class RenewalRiskService {
         daysToExpiry: row.daysToExpiry,
         signals: {
           daysToExpiryDays: row.signal?.daysToExpiryDays ?? 0,
-          paymentHistoryDelinquent: row.signal?.paymentHistoryDelinquent ?? false,
+          paymentHistoryDelinquent:
+            row.signal?.paymentHistoryDelinquent ?? false,
           noRenewalOfferYet: row.signal?.noRenewalOfferYet ?? false,
           rentGrowthAboveMarket: row.signal?.rentGrowthAboveMarket ?? false,
         },
@@ -283,7 +316,11 @@ export class RenewalRiskService {
     }
 
     const normalized = new Date(
-      Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate()),
+      Date.UTC(
+        parsed.getUTCFullYear(),
+        parsed.getUTCMonth(),
+        parsed.getUTCDate(),
+      ),
     );
     return normalized;
   }

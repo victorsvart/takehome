@@ -15,9 +15,9 @@ async function main() {
   });
 
   if (existing) {
-    // Keep seed idempotent for quick reruns during take-home verification.
-    console.log(`Seed already exists. propertyId=${existing.id}`);
-    return;
+    // DECISION: Rebuild the canonical seeded property on every run so reviewers
+    // get deterministic scenarios and acceptance counts without manual cleanup.
+    await clearSeedProperty(existing.id);
   }
 
   const property = await prisma.property.create({
@@ -65,59 +65,199 @@ async function main() {
     })),
   });
 
-  await createResidentScenario({
-    propertyId: property.id,
-    unitId: units[0].id,
-    firstName: 'Jane',
-    lastName: 'Doe',
-    email: 'jane.doe@example.com',
-    monthlyRent: 1400,
-    daysToExpiry: 45,
-    leaseType: 'fixed',
-    paymentsInLastSixMonths: 6,
-    createRenewalOffer: false,
-  });
+  // DECISION: This scenario set is intentionally deterministic and calibrated to
+  // produce a non-empty, mixed-risk dataset for the take-home checks.
+  const scenarios: Array<{
+    firstName: string;
+    lastName: string;
+    email: string;
+    monthlyRent: number;
+    daysToExpiry: number;
+    leaseType: 'fixed' | 'month_to_month';
+    paymentsInLastSixMonths: number;
+    createRenewalOffer: boolean;
+  }> = [
+    {
+      firstName: 'Jane',
+      lastName: 'Doe',
+      email: 'jane.doe@example.com',
+      monthlyRent: 1400,
+      daysToExpiry: 45,
+      leaseType: 'fixed',
+      paymentsInLastSixMonths: 6,
+      createRenewalOffer: false,
+    },
+    {
+      firstName: 'John',
+      lastName: 'Smith',
+      email: 'john.smith@example.com',
+      monthlyRent: 1500,
+      daysToExpiry: 60,
+      leaseType: 'fixed',
+      paymentsInLastSixMonths: 5,
+      createRenewalOffer: true,
+    },
+    {
+      firstName: 'Alice',
+      lastName: 'Johnson',
+      email: 'alice.johnson@example.com',
+      monthlyRent: 1600,
+      daysToExpiry: 180,
+      leaseType: 'fixed',
+      paymentsInLastSixMonths: 6,
+      createRenewalOffer: true,
+    },
+    {
+      firstName: 'Bob',
+      lastName: 'Williams',
+      email: 'bob.williams@example.com',
+      monthlyRent: 1700,
+      daysToExpiry: 30,
+      leaseType: 'month_to_month',
+      paymentsInLastSixMonths: 6,
+      createRenewalOffer: false,
+    },
+    {
+      firstName: 'Carlos',
+      lastName: 'Martinez',
+      email: 'carlos.martinez@example.com',
+      monthlyRent: 1400,
+      daysToExpiry: 30,
+      leaseType: 'fixed',
+      paymentsInLastSixMonths: 4,
+      createRenewalOffer: false,
+    },
+    {
+      firstName: 'Priya',
+      lastName: 'Patel',
+      email: 'priya.patel@example.com',
+      monthlyRent: 1400,
+      daysToExpiry: 60,
+      leaseType: 'fixed',
+      paymentsInLastSixMonths: 4,
+      createRenewalOffer: false,
+    },
+    {
+      firstName: 'Emma',
+      lastName: 'Brown',
+      email: 'emma.brown@example.com',
+      monthlyRent: 1400,
+      daysToExpiry: 75,
+      leaseType: 'fixed',
+      paymentsInLastSixMonths: 4,
+      createRenewalOffer: false,
+    },
+    {
+      firstName: 'Noah',
+      lastName: 'Davis',
+      email: 'noah.davis@example.com',
+      monthlyRent: 1700,
+      daysToExpiry: 30,
+      leaseType: 'fixed',
+      paymentsInLastSixMonths: 4,
+      createRenewalOffer: true,
+    },
+    {
+      firstName: 'Liam',
+      lastName: 'Wilson',
+      email: 'liam.wilson@example.com',
+      monthlyRent: 1700,
+      daysToExpiry: 75,
+      leaseType: 'fixed',
+      paymentsInLastSixMonths: 6,
+      createRenewalOffer: false,
+    },
+    {
+      firstName: 'Mia',
+      lastName: 'Taylor',
+      email: 'mia.taylor@example.com',
+      monthlyRent: 1700,
+      daysToExpiry: 180,
+      leaseType: 'fixed',
+      paymentsInLastSixMonths: 6,
+      createRenewalOffer: true,
+    },
+    {
+      firstName: 'Olivia',
+      lastName: 'Anderson',
+      email: 'olivia.anderson@example.com',
+      monthlyRent: 1700,
+      daysToExpiry: 210,
+      leaseType: 'fixed',
+      paymentsInLastSixMonths: 6,
+      createRenewalOffer: true,
+    },
+    {
+      firstName: 'Ethan',
+      lastName: 'Thomas',
+      email: 'ethan.thomas@example.com',
+      monthlyRent: 1700,
+      daysToExpiry: 120,
+      leaseType: 'fixed',
+      paymentsInLastSixMonths: 6,
+      createRenewalOffer: true,
+    },
+    {
+      firstName: 'Ava',
+      lastName: 'Jackson',
+      email: 'ava.jackson@example.com',
+      monthlyRent: 1500,
+      daysToExpiry: 200,
+      leaseType: 'fixed',
+      paymentsInLastSixMonths: 6,
+      createRenewalOffer: true,
+    },
+    {
+      firstName: 'Lucas',
+      lastName: 'White',
+      email: 'lucas.white@example.com',
+      monthlyRent: 1700,
+      daysToExpiry: 150,
+      leaseType: 'fixed',
+      paymentsInLastSixMonths: 5,
+      createRenewalOffer: true,
+    },
+    {
+      firstName: 'Sophia',
+      lastName: 'Harris',
+      email: 'sophia.harris@example.com',
+      monthlyRent: 1700,
+      daysToExpiry: 210,
+      leaseType: 'fixed',
+      paymentsInLastSixMonths: 5,
+      createRenewalOffer: true,
+    },
+  ];
 
-  await createResidentScenario({
-    propertyId: property.id,
-    unitId: units[1].id,
-    firstName: 'John',
-    lastName: 'Smith',
-    email: 'john.smith@example.com',
-    monthlyRent: 1500,
-    daysToExpiry: 60,
-    leaseType: 'fixed',
-    paymentsInLastSixMonths: 5,
-    createRenewalOffer: false,
-  });
-
-  await createResidentScenario({
-    propertyId: property.id,
-    unitId: units[2].id,
-    firstName: 'Alice',
-    lastName: 'Johnson',
-    email: 'alice.johnson@example.com',
-    monthlyRent: 1600,
-    daysToExpiry: 180,
-    leaseType: 'fixed',
-    paymentsInLastSixMonths: 6,
-    createRenewalOffer: true,
-  });
-
-  await createResidentScenario({
-    propertyId: property.id,
-    unitId: units[3].id,
-    firstName: 'Bob',
-    lastName: 'Williams',
-    email: 'bob.williams@example.com',
-    monthlyRent: 1450,
-    daysToExpiry: 30,
-    leaseType: 'month_to_month',
-    paymentsInLastSixMonths: 6,
-    createRenewalOffer: false,
-  });
+  for (let index = 0; index < scenarios.length; index += 1) {
+    const scenario = scenarios[index];
+    await createResidentScenario({
+      propertyId: property.id,
+      unitId: units[index].id,
+      ...scenario,
+    });
+  }
 
   console.log(`Seed complete. propertyId=${property.id}`);
+}
+
+async function clearSeedProperty(propertyId: string) {
+  await prisma.webhookDeliveryAttempt.deleteMany({
+    where: { webhookState: { propertyId } },
+  });
+  await prisma.webhookDeadLetterQueue.deleteMany({ where: { propertyId } });
+  await prisma.webhookDeliveryState.deleteMany({ where: { propertyId } });
+  await prisma.renewalEvent.deleteMany({ where: { propertyId } });
+  await prisma.renewalRiskSignal.deleteMany({ where: { propertyId } });
+  await prisma.renewalRiskScore.deleteMany({ where: { propertyId } });
+  await prisma.renewalOffer.deleteMany({ where: { propertyId } });
+  await prisma.residentLedger.deleteMany({ where: { propertyId } });
+  await prisma.lease.deleteMany({ where: { propertyId } });
+  await prisma.resident.deleteMany({ where: { propertyId } });
+  await prisma.unitPricing.deleteMany({ where: { unit: { propertyId } } });
+  await prisma.unit.deleteMany({ where: { propertyId } });
+  await prisma.unitType.deleteMany({ where: { propertyId } });
+  await prisma.property.delete({ where: { id: propertyId } });
 }
 
 async function createResidentScenario(params: {

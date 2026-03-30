@@ -277,6 +277,7 @@ model RenewalEvent {
 model WebhookDeliveryState {
   id             String                   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   eventId        String                   @unique @map("event_id") @db.Uuid
+  eventKey       String?                  @unique @map("event_key") @db.VarChar(100)
   propertyId     String                   @map("property_id") @db.Uuid
   residentId     String                   @map("resident_id") @db.Uuid
   status         DeliveryStatus           @default(pending)

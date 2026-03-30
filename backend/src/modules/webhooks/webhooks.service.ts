@@ -67,6 +67,10 @@ export class WebhooksService {
       await tx.webhookDeliveryState.create({
         data: {
           eventId: createdEvent.id,
+          // DECISION: Store both the internal DB FK (`eventId`) and external
+          // idempotency key (`eventKey`) to keep relational integrity and enable
+          // direct operational lookup by evt-* values.
+          eventKey: createdEvent.eventId,
           propertyId: score.propertyId,
           residentId: score.residentId,
           status: DeliveryStatus.pending,
@@ -103,12 +107,10 @@ export class WebhooksService {
     }
 
     const endpoint = this.configService.get<string>('RMS_WEBHOOK_URL');
-    if (!endpoint) {
-      throw new NotFoundException('RMS_WEBHOOK_URL is not configured');
-    }
 
-    // For take-home speed we retry inline... production should offload retries
-    // to a queue/worker that polls next_retry_at and processes asynchronously.
+    // DECISION: Keep retries inline so behavior is easy to
+    // verify end-to-end without extra worker infrastructure. In a real life scenario, we should
+    // move this to an async queue/worker polling `next_retry_at`.
     for (
       let index = 0;
       index < WebhooksService.RETRY_DELAYS_MS.length;
@@ -119,6 +121,12 @@ export class WebhooksService {
         attemptNumber === WebhooksService.RETRY_DELAYS_MS.length;
 
       try {
+        // DECISION: Missing endpoint configuration still flows through the same
+        // failure/retry/DLQ path so delivery state remains fully auditable.
+        if (!endpoint) {
+          throw new Error('RMS_WEBHOOK_URL is not configured');
+        }
+
         const response = await axios.post(endpoint, event.payload, {
           timeout: 1500,
           headers: {

@@ -1,6 +1,11 @@
 # Renewal Risk Detection System
 
-This repository delivers the take-home requirements:
+## Implementation Decisions
+
+Key ambiguity/tradeoff decisions are documented inline in code comments tagged with `DECISION:`.
+To review them quickly, search your IDE for `DECISION:`.
+
+This repository delivers the take-home requirements using/through:
 
 - NestJS + Prisma backend for risk scoring and webhook delivery
 - PostgreSQL schema + migration SQL
