@@ -222,7 +222,11 @@ export class RenewalRiskService {
       },
       orderBy: [{ riskScore: 'desc' }, { residentId: 'asc' }],
       include: {
-        resident: true,
+        resident: {
+          include: {
+            unit: true,
+          },
+        },
         signal: true,
       },
     });
@@ -242,7 +246,7 @@ export class RenewalRiskService {
       flags: flagged.map((row) => ({
         residentId: row.residentId,
         name: `${row.resident.firstName} ${row.resident.lastName}`,
-        unitId: row.signal?.unitId ?? '',
+        unitId: row.resident.unit.unitNumber,
         riskScore: row.riskScore,
         riskTier: row.riskTier,
         daysToExpiry: row.daysToExpiry,
