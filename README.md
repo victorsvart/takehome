@@ -130,6 +130,33 @@ Set `RMS_WEBHOOK_URL` in `backend/.env` to your [webhook.site](https://webhook.s
 - Click `Trigger Renewal Event` for any resident
 - Confirm payload arrives at webhook.site quickly
 
+### Webhook authenticity verification (RMS side)
+
+Each webhook request includes:
+
+- `x-idempotency-key`: external event id (`evt-*`)
+- `x-westface-signature`: HMAC SHA-256 hex digest
+
+Signature implementation in this project:
+
+1. Build the webhook payload JSON object.
+2. Serialize with `JSON.stringify(payload)`.
+3. Compute `HMAC_SHA256(serializedPayload, RMS_WEBHOOK_SECRET)`.
+4. Send the hex digest in `x-westface-signature`.
+
+Minimal RMS verification sketch:
+
+```js
+import { createHmac } from 'crypto';
+
+function verifySignature(serializedPayload, incomingSignature, secret) {
+  const expected = createHmac('sha256', secret)
+    .update(serializedPayload)
+    .digest('hex');
+  return expected === incomingSignature;
+}
+```
+
 ### Retry + DLQ (failure path)
 
 Set `RMS_WEBHOOK_URL` to an unreachable URL (example `http://127.0.0.1:65535/webhook`) and trigger again.
@@ -161,3 +188,11 @@ HAVING COUNT(*) > 1;
 ```
 
 Expected: empty result set.
+
+## Edge Case Behavior
+
+- **RMS endpoint unreachable:** each attempt is recorded; retries follow `1s, 2s, 4s, 8s, 16s`; final state moves to `dlq` after 5 failed attempts.
+- **Lease already expired:** batch calculation only processes leases with status `active`; expired leases are excluded from risk output.
+- **Missing market rent:** calculation still succeeds; market-rent signal uses a conservative partial value so the resident can still be scored.
+- **Batch triggered simultaneously:** risk rows are keyed by `(property_id, resident_id, as_of_date)` and upserted, preventing duplicate score rows for the same snapshot.
+- **Month-to-month lease:** treated as `30` days to expiry for risk scoring.

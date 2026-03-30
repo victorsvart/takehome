@@ -55,10 +55,34 @@ Signals are persisted in `renewal_risk_signals` for explainability.
 - Retry delays: `1s, 2s, 4s, 8s, 16s`
 - After 5 failed attempts, status moves to `dlq`
 - Duplicate triggers return existing delivery state for idempotency
+- Concurrent duplicate triggers are constrained to one `renewal.risk_flagged` event per risk score via DB uniqueness + conflict handling
 
 This take-home uses inline retry for speed and clear verification. Production should use a queue/worker that polls `next_retry_at` to avoid request blocking and improve throughput.
 
 Decision rationale comments are tagged as `DECISION:` in source code for quick reviewer lookup.
+
+### RMS signature verification contract
+
+Requests include:
+
+- `x-idempotency-key`: `evt-*` event identifier
+- `x-westface-signature`: HMAC SHA-256 hex digest
+
+Signature generation used by this service:
+
+1. Serialize outgoing payload with `JSON.stringify(payload)`.
+2. Compute HMAC with `RMS_WEBHOOK_SECRET`.
+3. Send hex digest as `x-westface-signature`.
+
+RMS services should verify the same serialization + secret before accepting the event.
+
+## Edge Case Decisions
+
+- **RMS unreachable:** every attempt is written to `webhook_delivery_attempts`; state transitions to `dlq` after max retries.
+- **Expired lease:** excluded from batch because only `LeaseStatus.active` is evaluated.
+- **Missing market rent:** score still computes with a partial market signal fallback.
+- **Simultaneous batch calls:** risk records are upserted using unique `(property_id, resident_id, as_of_date)`.
+- **Month-to-month lease:** modeled as 30 days to expiry for scoring.
 
 ## Manual Verification Queries
 

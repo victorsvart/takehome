@@ -277,6 +277,7 @@ model RenewalEvent {
   deliveryState      WebhookDeliveryState?
   dlqEntries         WebhookDeadLetterQueue[]
 
+  @@unique([renewalRiskScoreId, eventType], map: "renewal_events_risk_score_event_type_key")
   @@index([propertyId, createdAt], map: "idx_renewal_events_property_created")
   @@map("renewal_events")
 }

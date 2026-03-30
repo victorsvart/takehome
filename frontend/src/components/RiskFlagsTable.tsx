@@ -59,56 +59,64 @@ export function RiskFlagsTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {flags.map((flag) => (
-              <TableRow key={flag.residentId}>
-                <TableCell>{flag.name}</TableCell>
-                <TableCell>{flag.unitId}</TableCell>
-                <TableCell>{flag.daysToExpiry}</TableCell>
-                <TableCell>{flag.riskScore}</TableCell>
-                <TableCell>
-                  <Badge variant={tierVariant(flag.riskTier)}>{flag.riskTier}</Badge>
-                </TableCell>
-                <TableCell className="max-w-sm whitespace-normal">
-                  <Accordion type="single" collapsible>
-                    <AccordionItem value={`signals-${flag.residentId}`}>
-                      <AccordionTrigger>Why flagged</AccordionTrigger>
-                      <AccordionContent>
-                        <ul className="list-disc space-y-1 pl-4 text-muted-foreground">
-                          <li>daysToExpiryDays: {flag.signals.daysToExpiryDays}</li>
-                          <li>
-                            paymentHistoryDelinquent:{' '}
-                            {String(flag.signals.paymentHistoryDelinquent)}
-                          </li>
-                          <li>
-                            noRenewalOfferYet: {String(flag.signals.noRenewalOfferYet)}
-                          </li>
-                          <li>
-                            rentGrowthAboveMarket:{' '}
-                            {String(flag.signals.rentGrowthAboveMarket)}
-                          </li>
-                        </ul>
-                      </AccordionContent>
-                    </AccordionItem>
-                  </Accordion>
-                </TableCell>
-                <TableCell className="space-y-1 whitespace-normal">
-                  <Button
-                    size="sm"
-                    onClick={() => onTrigger(flag.residentId)}
-                    disabled={triggerState[flag.residentId] === 'sending'}
-                  >
-                    {triggerState[flag.residentId] === 'sending'
-                      ? 'Sending...'
-                      : 'Trigger Renewal Event'}
-                  </Button>
-                  {triggerState[flag.residentId] ? (
-                    <p className="text-xs text-muted-foreground">
-                      {triggerState[flag.residentId]}
-                    </p>
-                  ) : null}
+            {flags.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                  No flagged residents in the latest snapshot.
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              flags.map((flag) => (
+                <TableRow key={flag.residentId}>
+                  <TableCell>{flag.name}</TableCell>
+                  <TableCell>{flag.unitId}</TableCell>
+                  <TableCell>{flag.daysToExpiry}</TableCell>
+                  <TableCell>{flag.riskScore}</TableCell>
+                  <TableCell>
+                    <Badge variant={tierVariant(flag.riskTier)}>{flag.riskTier}</Badge>
+                  </TableCell>
+                  <TableCell className="max-w-sm whitespace-normal">
+                    <Accordion type="single" collapsible>
+                      <AccordionItem value={`signals-${flag.residentId}`}>
+                        <AccordionTrigger>Why flagged</AccordionTrigger>
+                        <AccordionContent>
+                          <ul className="list-disc space-y-1 pl-4 text-muted-foreground">
+                            <li>daysToExpiryDays: {flag.signals.daysToExpiryDays}</li>
+                            <li>
+                              paymentHistoryDelinquent:{' '}
+                              {String(flag.signals.paymentHistoryDelinquent)}
+                            </li>
+                            <li>
+                              noRenewalOfferYet: {String(flag.signals.noRenewalOfferYet)}
+                            </li>
+                            <li>
+                              rentGrowthAboveMarket:{' '}
+                              {String(flag.signals.rentGrowthAboveMarket)}
+                            </li>
+                          </ul>
+                        </AccordionContent>
+                      </AccordionItem>
+                    </Accordion>
+                  </TableCell>
+                  <TableCell className="space-y-1 whitespace-normal">
+                    <Button
+                      size="sm"
+                      onClick={() => onTrigger(flag.residentId)}
+                      disabled={triggerState[flag.residentId] === 'sending'}
+                    >
+                      {triggerState[flag.residentId] === 'sending'
+                        ? 'Sending...'
+                        : 'Trigger Renewal Event'}
+                    </Button>
+                    {triggerState[flag.residentId] ? (
+                      <p className="text-xs text-muted-foreground">
+                        {triggerState[flag.residentId]}
+                      </p>
+                    ) : null}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </CardContent>

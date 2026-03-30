@@ -13,7 +13,10 @@ import {
 } from '@/lib/api';
 import type { RenewalRiskResponse, TestProperty } from '@/types/renewal-risk';
 
-const propertyIdFromPath = window.location.pathname.split('/')[2] ?? '';
+const routeMatch = /^\/properties\/([^/]+)\/renewal-risk\/?$/.exec(
+  window.location.pathname,
+);
+const propertyIdFromPath = routeMatch?.[1] ?? '';
 const defaultPropertyId =
   propertyIdFromPath || import.meta.env.VITE_DEFAULT_PROPERTY_ID || '';
 
@@ -132,6 +135,16 @@ export function RenewalRiskPage() {
           Path: /properties/:propertyId/renewal-risk
         </p>
       </div>
+
+      {!routeMatch ? (
+        <Alert>
+          <AlertTitle>Route tip</AlertTitle>
+          <AlertDescription>
+            Open this page using <code>/properties/:propertyId/renewal-risk</code>.
+            You can still test from here by entering/selecting a property id.
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       <Toolbar
         propertyId={propertyId}

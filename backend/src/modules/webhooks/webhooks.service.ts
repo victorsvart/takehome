@@ -42,44 +42,81 @@ export class WebhooksService {
     });
 
     if (existingEvent?.deliveryState) {
-      return {
-        eventId: existingEvent.eventId,
-        deliveryStatus: existingEvent.deliveryState.status,
-        attemptCount: existingEvent.deliveryState.attemptCount,
-      };
+      return this.toDeliverySummary(existingEvent);
     }
 
     const eventId = `evt-${randomUUID()}`;
     const payload = this.buildPayload(score, score.signal, eventId);
 
-    const renewalEvent = await this.prisma.$transaction(async (tx) => {
-      const createdEvent = await tx.renewalEvent.create({
-        data: {
-          eventId,
-          propertyId: score.propertyId,
-          residentId: score.residentId,
-          renewalRiskScoreId: score.id,
-          eventType: 'renewal.risk_flagged',
-          payload: payload as Prisma.InputJsonValue,
-        },
-      });
+    let renewalEvent: Awaited<
+      ReturnType<typeof this.prisma.renewalEvent.create>
+    > | null = null;
+    try {
+      renewalEvent = await this.prisma.$transaction(async (tx) => {
+        const createdEvent = await tx.renewalEvent.create({
+          data: {
+            eventId,
+            propertyId: score.propertyId,
+            residentId: score.residentId,
+            renewalRiskScoreId: score.id,
+            eventType: 'renewal.risk_flagged',
+            payload: payload as Prisma.InputJsonValue,
+          },
+        });
 
-      await tx.webhookDeliveryState.create({
-        data: {
-          eventId: createdEvent.id,
-          // DECISION: Store both the internal DB FK (`eventId`) and external
-          // idempotency key (`eventKey`) to keep relational integrity and enable
-          // direct operational lookup by evt-* values.
-          eventKey: createdEvent.eventId,
-          propertyId: score.propertyId,
-          residentId: score.residentId,
-          status: DeliveryStatus.pending,
-          attemptCount: 0,
-        },
-      });
+        await tx.webhookDeliveryState.create({
+          data: {
+            eventId: createdEvent.id,
+            // DECISION: Store both the internal DB FK (`eventId`) and external
+            // idempotency key (`eventKey`) to keep relational integrity and enable
+            // direct operational lookup by evt-* values.
+            eventKey: createdEvent.eventId,
+            propertyId: score.propertyId,
+            residentId: score.residentId,
+            status: DeliveryStatus.pending,
+            attemptCount: 0,
+          },
+        });
 
-      return createdEvent;
-    });
+        return createdEvent;
+      });
+    } catch (error) {
+      if (this.isUniqueConflict(error)) {
+        const racedEvent = await this.prisma.renewalEvent.findFirst({
+          where: {
+            renewalRiskScoreId: score.id,
+            eventType: 'renewal.risk_flagged',
+          },
+          include: { deliveryState: true },
+        });
+
+        if (racedEvent?.deliveryState) {
+          return this.toDeliverySummary(racedEvent);
+        }
+
+        if (racedEvent) {
+          await this.prisma.webhookDeliveryState.upsert({
+            where: { eventId: racedEvent.id },
+            create: {
+              eventId: racedEvent.id,
+              eventKey: racedEvent.eventId,
+              propertyId: score.propertyId,
+              residentId: score.residentId,
+              status: DeliveryStatus.pending,
+              attemptCount: 0,
+            },
+            update: {},
+          });
+          return this.deliverWithRetry(racedEvent.id);
+        }
+      }
+
+      throw error;
+    }
+
+    if (!renewalEvent) {
+      throw new NotFoundException('Unable to create renewal event');
+    }
 
     return this.deliverWithRetry(renewalEvent.id);
   }
@@ -302,6 +339,31 @@ export class WebhooksService {
       statusCode: null,
       message: error instanceof Error ? error.message : 'Unknown webhook error',
       responseBody: undefined,
+    };
+  }
+
+  private isUniqueConflict(error: unknown): boolean {
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    );
+  }
+
+  private toDeliverySummary(event: {
+    eventId: string;
+    deliveryState: {
+      status: DeliveryStatus;
+      attemptCount: number;
+    } | null;
+  }): {
+    eventId: string;
+    deliveryStatus: DeliveryStatus;
+    attemptCount: number;
+  } {
+    return {
+      eventId: event.eventId,
+      deliveryStatus: event.deliveryState?.status ?? DeliveryStatus.pending,
+      attemptCount: event.deliveryState?.attemptCount ?? 0,
     };
   }
 
