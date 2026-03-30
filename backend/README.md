@@ -31,6 +31,7 @@ npm run start:dev
 ```
 
 API base URL: `http://localhost:3000/api/v1`
+Swagger docs: `http://localhost:3000/api/docs`
 
 ## Key Endpoints
 

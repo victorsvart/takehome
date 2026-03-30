@@ -29,15 +29,17 @@
     "@nestjs/config": "^4.0.3",
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
-    "@prisma/client": "^7.6.0",
+    "@nestjs/swagger": "^11.2.6",
     "@prisma/adapter-pg": "^7.6.0",
+    "@prisma/client": "^7.6.0",
     "axios": "^1.14.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "pg": "^8.16.3",
     "prisma": "^7.6.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
@@ -60,8 +62,8 @@
     "ts-jest": "^29.2.5",
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
-    "tsx": "^4.20.6",
     "tsconfig-paths": "^4.2.0",
+    "tsx": "^4.20.6",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.20.0"
   },

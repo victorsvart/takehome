@@ -1,7 +1,9 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { CalculateRenewalRiskDto } from './dto/calculate-renewal-risk.dto';
 import { RenewalRiskService } from './renewal-risk.service';
 
+@ApiTags('renewal-risk')
 @Controller('properties/:propertyId/renewal-risk')
 export class RenewalRiskController {
   constructor(private readonly renewalRiskService: RenewalRiskService) {}
