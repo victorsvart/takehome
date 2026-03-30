@@ -14,9 +14,9 @@ This repository delivers the take-home requirements using/through:
 
 ## Prerequisites
 
-- Docker Desktop
+- Docker Engine/Desktop
 
-## One-Command Startup (DB + Backend + Frontend)
+## One-Command Startup (DB + Backend + Frontend + Web Hook Mock Server)
 
 From repo root:
 
