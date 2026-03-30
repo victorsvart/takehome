@@ -30,9 +30,11 @@
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
     "@prisma/client": "^7.6.0",
+    "@prisma/adapter-pg": "^7.6.0",
     "axios": "^1.14.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
+    "pg": "^8.16.3",
     "prisma": "^7.6.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
@@ -58,6 +60,7 @@
     "ts-jest": "^29.2.5",
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
+    "tsx": "^4.20.6",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.20.0"
@@ -80,6 +83,6 @@
     "testEnvironment": "node"
   },
   "prisma": {
-    "seed": "ts-node prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts"
   }
 }

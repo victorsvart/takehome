@@ -1,7 +1,7 @@
 import { createHmac, randomUUID } from 'crypto';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { DeliveryStatus, RenewalRiskScore } from '@prisma/client';
+import { DeliveryStatus, Prisma, RenewalRiskScore } from '@prisma/client';
 import axios, { AxiosError } from 'axios';
 import { PrismaService } from '../../database/prisma.service';
 
@@ -50,7 +50,7 @@ export class WebhooksService {
     }
 
     const eventId = `evt-${randomUUID()}`;
-    const payload = this.buildPayload(score, eventId);
+    const payload = this.buildPayload(score, score.signal, eventId);
 
     const renewalEvent = await this.prisma.$transaction(async (tx) => {
       const createdEvent = await tx.renewalEvent.create({
@@ -60,7 +60,7 @@ export class WebhooksService {
           residentId: score.residentId,
           renewalRiskScoreId: score.id,
           eventType: 'renewal.risk_flagged',
-          payload,
+          payload: payload as Prisma.InputJsonValue,
         },
       });
 
@@ -107,11 +107,16 @@ export class WebhooksService {
       throw new NotFoundException('RMS_WEBHOOK_URL is not configured');
     }
 
-    // For take-home speed we retry inline; production should offload retries
+    // For take-home speed we retry inline... production should offload retries
     // to a queue/worker that polls next_retry_at and processes asynchronously.
-    for (let index = 0; index < WebhooksService.RETRY_DELAYS_MS.length; index += 1) {
+    for (
+      let index = 0;
+      index < WebhooksService.RETRY_DELAYS_MS.length;
+      index += 1
+    ) {
       const attemptNumber = index + 1;
-      const isLastAttempt = attemptNumber === WebhooksService.RETRY_DELAYS_MS.length;
+      const isLastAttempt =
+        attemptNumber === WebhooksService.RETRY_DELAYS_MS.length;
 
       try {
         const response = await axios.post(endpoint, event.payload, {
@@ -133,7 +138,7 @@ export class WebhooksService {
               nextRetryAt: null,
               lastHttpStatus: response.status,
               lastError: null,
-              rmsResponse: this.toJson(response.data),
+              rmsResponse: this.toInputJson(response.data),
             },
           });
 
@@ -143,7 +148,7 @@ export class WebhooksService {
               attemptNumber,
               successful: true,
               statusCode: response.status,
-              responseBody: this.toJson(response.data),
+              responseBody: this.toInputJson(response.data),
               attemptedAt: new Date(),
             },
           });
@@ -166,7 +171,9 @@ export class WebhooksService {
           const updatedState = await tx.webhookDeliveryState.update({
             where: { eventId: event.id },
             data: {
-              status: isLastAttempt ? DeliveryStatus.dlq : DeliveryStatus.failed,
+              status: isLastAttempt
+                ? DeliveryStatus.dlq
+                : DeliveryStatus.failed,
               attemptCount: attemptNumber,
               lastAttemptAt: new Date(),
               nextRetryAt,
@@ -187,6 +194,26 @@ export class WebhooksService {
               attemptedAt: new Date(),
             },
           });
+
+          if (isLastAttempt) {
+            await tx.webhookDeadLetterQueue.upsert({
+              where: { webhookStateId: updatedState.id },
+              create: {
+                webhookStateId: updatedState.id,
+                eventId: event.id,
+                propertyId: updatedState.propertyId,
+                residentId: updatedState.residentId,
+                reason: 'max_retries_exceeded',
+                lastError: parsedError.message,
+                payload: this.toInputJson(event.payload),
+              },
+              update: {
+                reason: 'max_retries_exceeded',
+                lastError: parsedError.message,
+                payload: this.toInputJson(event.payload),
+              },
+            });
+          }
 
           return updatedState;
         });
@@ -211,19 +238,15 @@ export class WebhooksService {
   }
 
   private buildPayload(
-    score: RenewalRiskScore & {
-      signal: {
-        daysToExpiryDays: number;
-        paymentHistoryDelinquent: boolean;
-        noRenewalOfferYet: boolean;
-        rentGrowthAboveMarket: boolean;
-      };
-      resident: {
-        unit: { unitNumber: string };
-      };
+    score: RenewalRiskScore,
+    signal: {
+      daysToExpiryDays: number;
+      paymentHistoryDelinquent: boolean;
+      noRenewalOfferYet: boolean;
+      rentGrowthAboveMarket: boolean;
     },
     eventId: string,
-  ): Record<string, unknown> {
+  ): Prisma.InputJsonObject {
     return {
       event: 'renewal.risk_flagged',
       eventId,
@@ -235,17 +258,18 @@ export class WebhooksService {
         riskTier: score.riskTier,
         daysToExpiry: score.daysToExpiry,
         signals: {
-          daysToExpiryDays: score.signal.daysToExpiryDays,
-          paymentHistoryDelinquent: score.signal.paymentHistoryDelinquent,
-          noRenewalOfferYet: score.signal.noRenewalOfferYet,
-          rentGrowthAboveMarket: score.signal.rentGrowthAboveMarket,
+          daysToExpiryDays: signal.daysToExpiryDays,
+          paymentHistoryDelinquent: signal.paymentHistoryDelinquent,
+          noRenewalOfferYet: signal.noRenewalOfferYet,
+          rentGrowthAboveMarket: signal.rentGrowthAboveMarket,
         },
       },
     };
   }
 
   private signPayload(payload: unknown): string {
-    const secret = this.configService.get<string>('RMS_WEBHOOK_SECRET') ?? 'dev-secret';
+    const secret =
+      this.configService.get<string>('RMS_WEBHOOK_SECRET') ?? 'dev-secret';
     return createHmac('sha256', secret)
       .update(JSON.stringify(payload))
       .digest('hex');
@@ -254,7 +278,7 @@ export class WebhooksService {
   private parseAxiosError(error: unknown): {
     statusCode: number | null;
     message: string;
-    responseBody: Record<string, unknown> | null;
+    responseBody: Prisma.InputJsonValue | undefined;
   } {
     if (axios.isAxiosError(error)) {
       const axiosError = error as AxiosError;
@@ -262,22 +286,23 @@ export class WebhooksService {
       return {
         statusCode,
         message: axiosError.message,
-        responseBody: this.toJson(axiosError.response?.data) ?? null,
+        responseBody: this.toInputJson(axiosError.response?.data),
       };
     }
 
     return {
       statusCode: null,
       message: error instanceof Error ? error.message : 'Unknown webhook error',
-      responseBody: null,
+      responseBody: undefined,
     };
   }
 
-  private toJson(value: unknown): Record<string, unknown> | null {
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      return value as Record<string, unknown>;
+  private toInputJson(value: unknown): Prisma.InputJsonValue | undefined {
+    if (value === undefined || value === null) {
+      return undefined;
     }
-    return null;
+
+    return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
   }
 
   private async sleep(ms: number): Promise<void> {

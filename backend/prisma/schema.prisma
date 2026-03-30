@@ -31,15 +31,15 @@ enum LeaseType {
 }
 
 model Property {
-  id                 String                 @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  name               String                 @unique @db.VarChar(255)
-  address            String?                @db.VarChar(500)
-  city               String?                @db.VarChar(100)
-  state              String?                @db.VarChar(2)
-  zipCode            String?                @map("zip_code") @db.VarChar(10)
-  status             String                 @default("active") @db.VarChar(50)
-  createdAt          DateTime               @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt          DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  id                 String                   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name               String                   @unique @db.VarChar(255)
+  address            String?                  @db.VarChar(500)
+  city               String?                  @db.VarChar(100)
+  state              String?                  @db.VarChar(2)
+  zipCode            String?                  @map("zip_code") @db.VarChar(10)
+  status             String                   @default("active") @db.VarChar(50)
+  createdAt          DateTime                 @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt          DateTime                 @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
   unitTypes          UnitType[]
   units              Unit[]
   residents          Resident[]
@@ -49,6 +49,7 @@ model Property {
   riskScores         RenewalRiskScore[]
   renewalEvents      RenewalEvent[]
   deliveries         WebhookDeliveryState[]
+  webhookDlqEntries  WebhookDeadLetterQueue[]
   renewalRiskSignals RenewalRiskSignal[]
 
   @@index([status], map: "idx_properties_status")
@@ -108,26 +109,27 @@ model UnitPricing {
 }
 
 model Resident {
-  id                 String                 @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  propertyId         String                 @map("property_id") @db.Uuid
-  unitId             String                 @map("unit_id") @db.Uuid
-  firstName          String                 @map("first_name") @db.VarChar(100)
-  lastName           String                 @map("last_name") @db.VarChar(100)
-  email              String?                @db.VarChar(255)
-  phone              String?                @db.VarChar(20)
-  status             String                 @default("active") @db.VarChar(50)
-  moveInDate         DateTime?              @map("move_in_date") @db.Date
-  moveOutDate        DateTime?              @map("move_out_date") @db.Date
-  createdAt          DateTime               @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt          DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
-  property           Property               @relation(fields: [propertyId], references: [id])
-  unit               Unit                   @relation(fields: [unitId], references: [id])
+  id                 String                   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  propertyId         String                   @map("property_id") @db.Uuid
+  unitId             String                   @map("unit_id") @db.Uuid
+  firstName          String                   @map("first_name") @db.VarChar(100)
+  lastName           String                   @map("last_name") @db.VarChar(100)
+  email              String?                  @db.VarChar(255)
+  phone              String?                  @db.VarChar(20)
+  status             String                   @default("active") @db.VarChar(50)
+  moveInDate         DateTime?                @map("move_in_date") @db.Date
+  moveOutDate        DateTime?                @map("move_out_date") @db.Date
+  createdAt          DateTime                 @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt          DateTime                 @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  property           Property                 @relation(fields: [propertyId], references: [id])
+  unit               Unit                     @relation(fields: [unitId], references: [id])
   leases             Lease[]
   ledgerEntries      ResidentLedger[]
   renewalOffers      RenewalOffer[]
   riskScores         RenewalRiskScore[]
   renewalEvents      RenewalEvent[]
   webhookDeliveries  WebhookDeliveryState[]
+  webhookDlqEntries  WebhookDeadLetterQueue[]
   renewalRiskSignals RenewalRiskSignal[]
 
   @@index([propertyId], map: "idx_residents_property_id")
@@ -250,18 +252,19 @@ model RenewalRiskSignal {
 }
 
 model RenewalEvent {
-  id                 String                @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  eventId            String                @unique @map("event_id") @db.VarChar(100)
-  propertyId         String                @map("property_id") @db.Uuid
-  residentId         String                @map("resident_id") @db.Uuid
-  renewalRiskScoreId String                @map("renewal_risk_score_id") @db.Uuid
-  eventType          String                @default("renewal.risk_flagged") @map("event_type") @db.VarChar(100)
+  id                 String                   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  eventId            String                   @unique @map("event_id") @db.VarChar(100)
+  propertyId         String                   @map("property_id") @db.Uuid
+  residentId         String                   @map("resident_id") @db.Uuid
+  renewalRiskScoreId String                   @map("renewal_risk_score_id") @db.Uuid
+  eventType          String                   @default("renewal.risk_flagged") @map("event_type") @db.VarChar(100)
   payload            Json
-  createdAt          DateTime              @default(now()) @map("created_at") @db.Timestamp(6)
-  property           Property              @relation(fields: [propertyId], references: [id])
-  resident           Resident              @relation(fields: [residentId], references: [id])
-  renewalRiskScore   RenewalRiskScore      @relation(fields: [renewalRiskScoreId], references: [id])
+  createdAt          DateTime                 @default(now()) @map("created_at") @db.Timestamp(6)
+  property           Property                 @relation(fields: [propertyId], references: [id])
+  resident           Resident                 @relation(fields: [residentId], references: [id])
+  renewalRiskScore   RenewalRiskScore         @relation(fields: [renewalRiskScoreId], references: [id])
   deliveryState      WebhookDeliveryState?
+  dlqEntries         WebhookDeadLetterQueue[]
 
   @@index([propertyId, createdAt], map: "idx_renewal_events_property_created")
   @@map("renewal_events")
@@ -285,6 +288,7 @@ model WebhookDeliveryState {
   property       Property                 @relation(fields: [propertyId], references: [id])
   resident       Resident                 @relation(fields: [residentId], references: [id])
   attempts       WebhookDeliveryAttempt[]
+  dlqEntry       WebhookDeadLetterQueue?
 
   @@index([status, nextRetryAt], map: "idx_webhook_delivery_state_retry_poll")
   @@index([propertyId, createdAt], map: "idx_webhook_delivery_state_property_created")
@@ -305,4 +309,23 @@ model WebhookDeliveryAttempt {
 
   @@index([webhookStateId, attemptNumber], map: "idx_webhook_delivery_attempt_state_attempt")
   @@map("webhook_delivery_attempts")
+}
+
+model WebhookDeadLetterQueue {
+  id             String               @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  webhookStateId String               @unique @map("webhook_state_id") @db.Uuid
+  eventId        String               @map("event_id") @db.Uuid
+  propertyId     String               @map("property_id") @db.Uuid
+  residentId     String               @map("resident_id") @db.Uuid
+  reason         String               @db.VarChar(255)
+  lastError      String?              @map("last_error") @db.Text
+  payload        Json?
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamp(6)
+  webhookState   WebhookDeliveryState @relation(fields: [webhookStateId], references: [id])
+  renewalEvent   RenewalEvent         @relation(fields: [eventId], references: [id])
+  property       Property             @relation(fields: [propertyId], references: [id])
+  resident       Resident             @relation(fields: [residentId], references: [id])
+
+  @@index([propertyId, createdAt], map: "idx_webhook_dlq_property_created")
+  @@map("webhook_dead_letter_queue")
 }
