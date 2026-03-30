@@ -6,6 +6,7 @@ datasource db {
   provider = "postgresql"
 }
 
+// Prisma studio is available. But enums are not listed there.
 enum RiskTier {
   low
   medium
@@ -29,6 +30,9 @@ enum LeaseType {
   fixed
   month_to_month
 }
+
+// these models should probably live in their own folders, and have their own schema.prisma files.
+// for speed's sake, we'll keep them here.
 
 model Property {
   id                 String                   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
