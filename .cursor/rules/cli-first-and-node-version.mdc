@@ -1,0 +1,12 @@
+---
+description: Enforce CLI-first workflow and nvm Node version usage
+alwaysApply: true
+---
+
+# CLI-First and Node Runtime Rule
+
+- Prefer CLI commands for operations that have an official command path.
+- Do not manually craft generated artifacts when a tool command should produce them (for example migrations, scaffolds, lockfiles, or framework-generated files).
+- Use command-based workflows for setup, generation, and execution whenever possible.
+- Always use `nvm` in this repository and select `lts/krypton` before running Node-based commands.
+- Keep `.nvmrc` in sync with the required runtime.

@@ -1,0 +1,15 @@
+---
+description: Backend implementation standards for NestJS 11 on Node 24
+globs: backend/**/*
+alwaysApply: false
+---
+
+# Backend Stack Rules
+
+- Use NestJS `11.x` patterns and conventions for new backend work.
+- Target Node.js `24.x`; choose APIs and package versions compatible with Node 24.
+- Prefer TypeScript-first Nest architecture: modules, controllers, providers, DTO validation, and explicit typing.
+- Keep endpoints RESTful and aligned to take-home contracts under `/api/v1/properties/:propertyId/renewal-risk`.
+- Use PostgreSQL with explicit migrations and indexed queries for property-scoped access.
+- Design webhook delivery state updates to be atomic and safe under retries/concurrency.
+- Prioritize observability: structured errors and actionable logs for retries, failures, and DLQ transitions.

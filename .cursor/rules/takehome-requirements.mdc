@@ -1,0 +1,14 @@
+---
+description: Enforce take-home scope, deliverables, and reliability requirements
+alwaysApply: true
+---
+
+# Renewal Risk Take-Home Compliance
+
+- Build only what the prompt asks: backend API, schema/migrations, webhook delivery state/retries, and a minimal React dashboard.
+- Keep decisions practical and shippable within time; avoid over-engineering and avoid unrelated features.
+- Preserve multi-tenancy with `property_id` in schema and query paths.
+- Prefer clear, auditable data modeling for risk scores, risk signals, and webhook delivery lifecycle.
+- Handle and document edge cases: expired leases, missing market rent, duplicate batch triggers, and unreachable RMS endpoints.
+- Ensure webhook flow has idempotency, exponential backoff (`1s, 2s, 4s, 8s, 16s`), and DLQ behavior after 5 failed attempts.
+- Optimize for operations usability: clear API contracts, loading/error states, and practical README testing instructions.

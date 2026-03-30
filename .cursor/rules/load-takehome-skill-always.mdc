@@ -1,0 +1,12 @@
+---
+description: Always load the renewal-risk take-home skill first
+alwaysApply: true
+---
+
+# Mandatory Skill Loading
+
+At the start of every task in this repository, load and follow:
+
+- `.cursor/skills/renewal-risk-takehome/SKILL.md`
+
+Treat that skill as mandatory operating guidance for planning, coding, and documentation decisions.

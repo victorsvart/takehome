@@ -1,0 +1,14 @@
+---
+description: Frontend standards for latest React + TypeScript dashboard work
+globs: frontend/**/*
+alwaysApply: false
+---
+
+# Frontend Stack Rules
+
+- Use the latest stable React release with TypeScript for all frontend additions.
+- Keep UI operational and clear; functionality and correctness take priority over visual polish.
+- Implement required dashboard behavior: risk table, loading/error states, and trigger-action workflow.
+- Keep components small and composable; lift shared data-fetching logic into hooks/services when useful.
+- Use accessible, understandable risk tier visuals (`high/medium/low`) and clear signal explanations.
+- Validate and surface API failures gracefully so property managers can recover quickly.
