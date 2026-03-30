@@ -10,6 +10,7 @@ type ToolbarProps = {
   onAsOfDateChange: (value: string) => void;
   onCalculate: () => void;
   onRefresh: () => void;
+  onOpenTestData: () => void;
 };
 
 export function Toolbar({
@@ -21,9 +22,10 @@ export function Toolbar({
   onAsOfDateChange,
   onCalculate,
   onRefresh,
+  onOpenTestData,
 }: ToolbarProps) {
   return (
-    <div className="grid gap-3 rounded-xl border bg-card p-4 md:grid-cols-[1fr_220px_auto_auto] md:items-end">
+    <div className="grid gap-3 rounded-xl border bg-card p-4 md:grid-cols-[1fr_220px_auto_auto_auto] md:items-end">
       <div className="space-y-1">
         <label className="text-sm font-medium" htmlFor="property-id">
           Property ID
@@ -54,6 +56,10 @@ export function Toolbar({
 
       <Button variant="outline" onClick={onRefresh} disabled={isLoading}>
         Refresh
+      </Button>
+
+      <Button variant="secondary" onClick={onOpenTestData}>
+        Test Data
       </Button>
     </div>
   );

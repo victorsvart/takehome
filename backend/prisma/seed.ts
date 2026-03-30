@@ -7,6 +7,7 @@ if (!connectionString) {
 }
 const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
+const REFERENCE_AS_OF_DATE = new Date('2025-01-02T00:00:00.000Z');
 
 async function main() {
   const existing = await prisma.property.findUnique({
@@ -61,7 +62,9 @@ async function main() {
       unitId: unit.id,
       baseRent: 1600,
       marketRent: 1600,
-      effectiveDate: new Date(),
+      // DECISION: Keep pricing effective before the guide's asOfDate so market
+      // rent signals are stable during acceptance checks.
+      effectiveDate: addDays(REFERENCE_AS_OF_DATE, -30),
     })),
   });
 
@@ -234,6 +237,7 @@ async function main() {
     await createResidentScenario({
       propertyId: property.id,
       unitId: units[index].id,
+      referenceAsOfDate: REFERENCE_AS_OF_DATE,
       ...scenario,
     });
   }
@@ -263,6 +267,7 @@ async function clearSeedProperty(propertyId: string) {
 async function createResidentScenario(params: {
   propertyId: string;
   unitId: string;
+  referenceAsOfDate: Date;
   firstName: string;
   lastName: string;
   email: string;
@@ -285,7 +290,9 @@ async function createResidentScenario(params: {
   });
 
   const leaseEndDate = new Date();
-  leaseEndDate.setDate(leaseEndDate.getDate() + params.daysToExpiry);
+  leaseEndDate.setTime(
+    addDays(params.referenceAsOfDate, params.daysToExpiry).getTime(),
+  );
 
   const lease = await prisma.lease.create({
     data: {
@@ -300,9 +307,17 @@ async function createResidentScenario(params: {
     },
   });
 
-  for (let monthOffset = 0; monthOffset < params.paymentsInLastSixMonths; monthOffset += 1) {
-    const transactionDate = new Date();
-    transactionDate.setMonth(transactionDate.getMonth() - monthOffset);
+  for (
+    let monthOffset = 0;
+    monthOffset < params.paymentsInLastSixMonths;
+    monthOffset += 1
+  ) {
+    // DECISION: Anchor payment history to the reference asOf date so delinquency
+    // checks are deterministic for the take-home test window.
+    const transactionDate = addMonths(
+      params.referenceAsOfDate,
+      -monthOffset,
+    );
     await prisma.residentLedger.create({
       data: {
         propertyId: params.propertyId,
@@ -316,8 +331,10 @@ async function createResidentScenario(params: {
   }
 
   if (params.createRenewalOffer) {
-    const renewalStartDate = new Date();
-    renewalStartDate.setDate(renewalStartDate.getDate() + params.daysToExpiry);
+    const renewalStartDate = addDays(
+      params.referenceAsOfDate,
+      params.daysToExpiry,
+    );
     const renewalEndDate = new Date(renewalStartDate);
     renewalEndDate.setDate(renewalEndDate.getDate() + 365);
 
@@ -333,6 +350,18 @@ async function createResidentScenario(params: {
       },
     });
   }
+}
+
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+function addMonths(date: Date, months: number): Date {
+  const next = new Date(date);
+  next.setUTCMonth(next.getUTCMonth() + months);
+  return next;
 }
 
 main()

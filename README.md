@@ -7,54 +7,96 @@ To review them quickly, search your IDE for `DECISION:`.
 
 This repository delivers the take-home requirements using/through:
 
-- NestJS + Prisma backend for risk scoring and webhook delivery
+- NestJS (running on Express) + Prisma backend for risk scoring and webhook delivery
 - PostgreSQL schema + migration SQL
 - React dashboard for `/properties/:propertyId/renewal-risk`
 - Seed + manual acceptance verification steps
 
 ## Prerequisites
 
-- Node.js `lts/krypton` (Node 24.x)
 - Docker Desktop
 
-## 1) Start PostgreSQL
+## One-Command Startup (DB + Backend + Frontend)
+
+From repo root:
 
 ```bash
 docker compose up -d
 ```
 
-## 2) Setup Backend
+This starts:
+
+- PostgreSQL 18 (`localhost:5432`)
+- Backend API (`http://localhost:3000/api/v1`)
+- Swagger docs (`http://localhost:3000/api/docs`)
+- Mock RMS webhook receiver (`http://localhost:3001/webhook`)
+- Frontend dashboard (`http://localhost:5173`)
+
+Backend migrations + seed run automatically on startup.
+
+By default, backend points to the in-compose mock webhook receiver.
+If a reviewer wants to use webhook.site instead, start compose with:
 
 ```bash
-cd backend
-cp .env.example .env
-npm install
-npm run prisma:generate
-npm run prisma:migrate:deploy
-npm run db:seed
-npm run start:dev
+RMS_WEBHOOK_URL="https://webhook.site/<your-unique-id>" docker compose up -d
 ```
 
-Backend runs at `http://localhost:3000` with API prefix `/api/v1`.
-
-## 3) Setup Frontend
-
-Open a new terminal:
+To stop all services:
 
 ```bash
-cd frontend
-cp .env.example .env
-npm install
-npm run dev
+docker compose down
 ```
 
 Then open:
 
 - `http://localhost:5173/properties/<propertyId>/renewal-risk`
 
-Use the property id printed by backend seed script.
+Use the dashboard `Test Data` button to pick a valid seeded property id.
 
 ## Manual Acceptance Checks
+
+### Get a testable property ID
+
+- Run backend seed (`npm run db:seed`) and copy the printed `propertyId`.
+- Or use the dashboard `Test Data` button to open a modal listing available properties.
+- You can also set `VITE_DEFAULT_PROPERTY_ID` in `frontend/.env` to preload one.
+
+### Get a valid webhook.site URL
+
+1. Open [webhook.site](https://webhook.site/).
+2. Copy your unique URL from the page.
+3. Set `RMS_WEBHOOK_URL="<your webhook.site url>"` in `backend/.env`.
+4. Restart backend if it is already running.
+
+For local-only failure-path testing, set an unreachable URL such as `http://127.0.0.1:65535/webhook`.
+
+### Use the built-in mock RMS server
+
+Compose starts a mock webhook server at `http://localhost:3001` with helpful test endpoints:
+
+- `GET /health` checks mock server status
+- `POST /mock/fail` toggles failure mode (`503`) for retry/DLQ testing
+- `GET /mock/events` lists captured webhook events
+
+Examples:
+
+```bash
+# Confirm mock server is running
+curl http://localhost:3001/health
+
+# Enable failure mode (simulate RMS outage)
+curl -X POST http://localhost:3001/mock/fail \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true}'
+
+# Disable failure mode (back to success)
+curl -X POST http://localhost:3001/mock/fail \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": false}'
+
+# Inspect received idempotent events
+curl http://localhost:3001/mock/events
+```
 
 ### Calculate Endpoint Structure + Tier Counts
 
@@ -79,6 +121,7 @@ Open dashboard route and confirm rows render with:
 - days to expiry
 - risk score + tier
 - expandable signals list
+- `Test Data` modal allows selecting a seeded property
 
 ### Webhook Delivery (success path)
 

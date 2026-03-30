@@ -6,6 +6,10 @@ datasource db {
   provider = "postgresql"
 }
 
+// DECISION: We treat starter_schema.sql as immutable reference input. The core
+// provided tables are mirrored in Prisma models, while candidate-responsibility
+// sections are implemented in the renewal/webhook models below.
+
 // Prisma studio is available. But enums are not listed there.
 enum RiskTier {
   low
@@ -233,6 +237,9 @@ model RenewalRiskScore {
   @@map("renewal_risk_scores")
 }
 
+// DECISION: starter_schema's example suggests a single signals_json blob on risk
+// scores. We intentionally normalize signals into a dedicated table for stronger
+// explainability queries and per-field indexing while preserving API shape.
 model RenewalRiskSignal {
   id                       String           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   propertyId               String           @map("property_id") @db.Uuid
@@ -274,6 +281,9 @@ model RenewalEvent {
   @@map("renewal_events")
 }
 
+// DECISION: starter_schema's example labels webhook event_id as an idempotency key.
+// We keep `event_id` here as a FK to `renewal_events.id` for ACID relations and add
+// `event_key` for direct lookup by external evt-* idempotency key.
 model WebhookDeliveryState {
   id             String                   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   eventId        String                   @unique @map("event_id") @db.Uuid
@@ -316,6 +326,8 @@ model WebhookDeliveryAttempt {
   @@map("webhook_delivery_attempts")
 }
 
+// DECISION: starter_schema's candidate section explicitly calls out DLQ behavior.
+// We model DLQ as a separate auditable table linked one-to-one with delivery state.
 model WebhookDeadLetterQueue {
   id             String               @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   webhookStateId String               @unique @map("webhook_state_id") @db.Uuid

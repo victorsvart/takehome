@@ -3,13 +3,15 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RiskFlagsTable } from '@/components/RiskFlagsTable';
 import { RiskSummaryCards } from '@/components/RiskSummaryCards';
+import { TestDataModal } from '@/components/TestDataModal';
 import { Toolbar } from '@/components/Toolbar';
 import {
   calculateRenewalRisk,
   getLatestRenewalRisk,
+  listProperties,
   triggerRenewalEvent,
 } from '@/lib/api';
-import type { RenewalRiskResponse } from '@/types/renewal-risk';
+import type { RenewalRiskResponse, TestProperty } from '@/types/renewal-risk';
 
 const propertyIdFromPath = window.location.pathname.split('/')[2] ?? '';
 const defaultPropertyId =
@@ -23,6 +25,10 @@ export function RenewalRiskPage() {
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [triggerState, setTriggerState] = useState<Record<string, string>>({});
+  const [isTestDataOpen, setIsTestDataOpen] = useState(false);
+  const [testProperties, setTestProperties] = useState<TestProperty[]>([]);
+  const [isLoadingProperties, setIsLoadingProperties] = useState(false);
+  const [propertiesError, setPropertiesError] = useState('');
 
   const sortedFlags = useMemo(() => {
     if (!data) {
@@ -98,6 +104,26 @@ export function RenewalRiskPage() {
     }
   }
 
+  async function handleOpenTestData() {
+    setIsTestDataOpen(true);
+    if (testProperties.length > 0 || isLoadingProperties) {
+      return;
+    }
+
+    setIsLoadingProperties(true);
+    setPropertiesError('');
+    try {
+      const rows = await listProperties();
+      setTestProperties(rows);
+    } catch (error) {
+      setPropertiesError(
+        error instanceof Error ? error.message : 'Failed to load properties.',
+      );
+    } finally {
+      setIsLoadingProperties(false);
+    }
+  }
+
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-4 p-4 md:p-6">
       <div>
@@ -116,6 +142,19 @@ export function RenewalRiskPage() {
         onAsOfDateChange={setAsOfDate}
         onCalculate={() => void handleCalculate()}
         onRefresh={() => void loadLatestRisk(propertyId)}
+        onOpenTestData={() => void handleOpenTestData()}
+      />
+
+      <TestDataModal
+        open={isTestDataOpen}
+        isLoading={isLoadingProperties}
+        errorMessage={propertiesError}
+        properties={testProperties}
+        onClose={() => setIsTestDataOpen(false)}
+        onSelectProperty={(nextPropertyId) => {
+          setPropertyId(nextPropertyId);
+          setIsTestDataOpen(false);
+        }}
       />
 
       {errorMessage ? (

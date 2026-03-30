@@ -1,5 +1,6 @@
 import type {
   RenewalRiskResponse,
+  TestProperty,
   TriggerRenewalEventResponse,
 } from '@/types/renewal-risk';
 
@@ -58,4 +59,13 @@ export async function triggerRenewalEvent(
   }
 
   return (await response.json()) as TriggerRenewalEventResponse;
+}
+
+export async function listProperties(): Promise<TestProperty[]> {
+  const response = await fetch(`${API_BASE_URL}/properties`);
+  if (!response.ok) {
+    throw new Error(`Failed to load properties (${response.status})`);
+  }
+
+  return (await response.json()) as TestProperty[];
 }

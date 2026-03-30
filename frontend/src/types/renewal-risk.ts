@@ -31,3 +31,8 @@ export type TriggerRenewalEventResponse = {
   deliveryStatus: string;
   attemptCount: number;
 };
+
+export type TestProperty = {
+  id: string;
+  name: string;
+};

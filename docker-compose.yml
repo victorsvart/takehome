@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     container_name: westface-postgres
     restart: unless-stopped
     environment:
@@ -16,6 +16,76 @@ services:
       retries: 10
     volumes:
       - westface_pgdata:/var/lib/postgresql/data
+    networks:
+      - westface_net
+
+  backend:
+    image: node:24-alpine
+    container_name: westface-backend
+    restart: unless-stopped
+    working_dir: /app
+    command: >
+      sh -c "npm install &&
+      npm run prisma:generate &&
+      npm run prisma:migrate:deploy &&
+      npm run db:seed &&
+      npm run start:dev"
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/westface?schema=public
+      RMS_WEBHOOK_URL: ${RMS_WEBHOOK_URL:-http://mock-rms:3001/webhook}
+      RMS_WEBHOOK_SECRET: dev-secret
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend:/app
+      - westface_backend_node_modules:/app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mock-rms:
+        condition: service_started
+    networks:
+      - westface_net
+
+  mock-rms:
+    image: node:24-alpine
+    container_name: westface-mock-rms
+    restart: unless-stopped
+    working_dir: /app
+    command: sh -c "npm install && npm run start"
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./mock-rms:/app
+      - westface_mock_rms_node_modules:/app/node_modules
+    networks:
+      - westface_net
+
+  frontend:
+    image: node:24-alpine
+    container_name: westface-frontend
+    restart: unless-stopped
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
+    environment:
+      VITE_API_BASE_URL: http://localhost:3000/api/v1
+      VITE_DEFAULT_PROPERTY_ID: ""
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - westface_frontend_node_modules:/app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - westface_net
 
 volumes:
   westface_pgdata:
+  westface_backend_node_modules:
+  westface_mock_rms_node_modules:
+  westface_frontend_node_modules:
+
+networks:
+  westface_net:
